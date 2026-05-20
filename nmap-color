@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Colorize nmap output with Dracula palette (true color)."""
+import sys, re
+
+R      = '\033[0m'
+GREEN  = '\033[38;2;80;250;123m'    # open
+RED    = '\033[38;2;255;85;85m'     # closed / failed
+ORANGE = '\033[38;2;255;184;108m'   # filtered / OS info
+CYAN   = '\033[38;2;139;233;253m'   # service / script output
+PURPLE = '\033[38;2;189;147;249m'   # port number / host IP
+PINK   = '\033[38;2;255;121;198m'   # section headers
+YELLOW = '\033[38;2;241;250;140m'   # nmap start / done
+GREY   = '\033[38;2;98;114;164m'    # misc / not shown / MAC
+
+PORT_RE = re.compile(
+    r'^(\d+/\w+)\s+(open(?:\|filtered)?|closed|filtered)\s+(\S+)(.*)'
+)
+STATE_COLOR = {
+    'open': GREEN,
+    'open|filtered': GREEN,
+    'closed': RED,
+    'filtered': ORANGE,
+}
+
+def colorize(line):
+    if re.match(r'^Starting Nmap|^Nmap done', line):
+        return YELLOW + line + R
+    if re.match(r'^Nmap scan report for', line):
+        return PINK + line + R
+    if re.match(r'^Host is up', line):
+        return GREEN + line + R
+    if re.match(r'^Host is down|^Failed to resolve', line):
+        return RED + line + R
+    if re.match(r'^PORT\s|^HOP\s', line):
+        return PINK + line + R
+    m = PORT_RE.match(line)
+    if m:
+        port, state, service, rest = m.groups()
+        sc = STATE_COLOR.get(state, ORANGE)
+        spaces1 = re.search(r'(\s+)', line[len(port):]).group(1)
+        spaces2 = re.search(r'(\s+)', line[len(port) + len(spaces1) + len(state):]).group(1) if re.search(r'(\s+)', line[len(port) + len(spaces1) + len(state):]) else ' '
+        return f"{PURPLE}{port}{R}{spaces1}{sc}{state}{R}{spaces2}{CYAN}{service}{R}{GREY}{rest}{R}"
+    if re.match(r'^\|', line):
+        return CYAN + line + R
+    if re.match(r'^Not shown:', line):
+        return GREY + line + R
+    if re.match(r'^MAC Address:', line):
+        return GREY + line + R
+    if re.match(r'^(Service Info|OS details|OS:|Running:|OS CPE:|Network Distance:)', line):
+        return ORANGE + line + R
+    if re.match(r'^Warning:|RTTVAR\s', line):
+        return YELLOW + line + R
+    return line
+
+sys.stdout.reconfigure(line_buffering=True)
+for line in sys.stdin:
+    print(colorize(line.rstrip('\n')))
